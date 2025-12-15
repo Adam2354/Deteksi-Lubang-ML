@@ -262,7 +262,7 @@ def predict_image_manual(image_path, model_path, apply_denoise=True, denoise_met
 
 
 # ============================================================================
-# FUNCTION: VISUALIZE WITH PREPROCESSING STEPS (IMPROVED GLCM)
+# FUNCTION: VISUALIZE WITH PREPROCESSING STEPS (WITH LBP HISTOGRAM)
 # ============================================================================
 def visualize_prediction_with_preprocessing(image_path, prediction, class_name, confidence, distances, 
                                            intermediate, show_plot=True, save_path=None):
