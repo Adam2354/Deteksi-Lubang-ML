@@ -8,7 +8,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from joblib import dump
 
-from extract_features import FeatureExtractorLBPGLCM
+from extract_features import FeatureExtractorLBP
 
 CLASS_MAP = {
     "jalan_tidak_rusak": 0,
@@ -16,7 +16,7 @@ CLASS_MAP = {
     "jalan_retak": 2,
 }
 
-def load_dataset(base_dir: str, extractor: FeatureExtractorLBPGLCM) -> Tuple[np.ndarray, np.ndarray]:
+def load_dataset(base_dir: str, extractor: FeatureExtractorLBP) -> Tuple[np.ndarray, np.ndarray]:
     X: List[np.ndarray] = []
     y: List[int] = []
 
@@ -95,15 +95,12 @@ def train_and_evaluate_knn(
 
 def main():
     # Inisialisasi extractor (samakan config dengan waktu infer)
-    extractor = FeatureExtractorLBPGLCM(
+    extractor = FeatureExtractorLBP(
         resize_width=256,
         resize_height=256,
         lbp_radius=1,
         lbp_points=8,
-        lbp_method="default",
-        glcm_distances=(1,),
-        glcm_angles=(0,),
-        glcm_levels=256,
+        lbp_method="uniform"  # Uniform LBP: (lbp_points + 2) dimensional feature vector
     )
 
     # Load train & test
@@ -128,8 +125,8 @@ def main():
 
     # Save model + scaler
     os.makedirs("models", exist_ok=True)
-    model_path = os.path.join("models", f"knn_lbp_glcm_k{best_k}.joblib")
-    scaler_path = os.path.join("models", f"scaler_lbp_glcm_k{best_k}.joblib")
+    model_path = os.path.join("models", f"knn_lbp_hist_k{best_k}.joblib")
+    scaler_path = os.path.join("models", f"scaler_lbp_hist_k{best_k}.joblib")
 
     dump(model, model_path)
     dump(scaler, scaler_path)

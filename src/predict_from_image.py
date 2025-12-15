@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from joblib import load
 
-from extract_features import FeatureExtractorLBPGLCM
+from extract_features import FeatureExtractorLBP
 
 # Sesuaikan dengan CLASS_MAP di train_knn.py
 LABEL_MAP = {
@@ -15,8 +15,8 @@ LABEL_MAP = {
 
 def load_model_and_scaler(models_dir: str):
     # Sesuaikan nama file dengan yang tadi kesimpan (k=3)
-    model_path = os.path.join(models_dir, "knn_lbp_glcm_k3.joblib")
-    scaler_path = os.path.join(models_dir, "scaler_lbp_glcm_k3.joblib")
+    model_path = os.path.join(models_dir, "knn_lbp_hist_k3.joblib")
+    scaler_path = os.path.join(models_dir, "scaler_lbp_hist_k3.joblib")
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model tidak ditemukan: {model_path}")
@@ -38,15 +38,12 @@ def main():
         sys.exit(1)
 
     # Setup extractor (harus sama config dengan training)
-    extractor = FeatureExtractorLBPGLCM(
+    extractor = FeatureExtractorLBP(
         resize_width=256,
         resize_height=256,
         lbp_radius=1,
         lbp_points=8,
-        lbp_method="default",
-        glcm_distances=(1,),
-        glcm_angles=(0,),
-        glcm_levels=256,
+        lbp_method="uniform"  # Uniform LBP: (lbp_points + 2) dimensional feature vector
     )
 
     # Load model + scaler

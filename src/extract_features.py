@@ -1,27 +1,21 @@
 import cv2
 import numpy as np
-from skimage.feature import local_binary_pattern, graycomatrix, graycoprops
+from skimage.feature import local_binary_pattern
 
-class FeatureExtractorLBPGLCM:
+class FeatureExtractorLBP:
     def __init__(
         self,
         resize_width: int = 256,
         resize_height: int = 256,
         lbp_radius: int = 1,
         lbp_points: int = 8,
-        lbp_method: str = "default",
-        glcm_distances = (1,),
-        glcm_angles = (0,),
-        glcm_levels: int = 256
+        lbp_method: str = "uniform"
     ):
         self.resize_width = resize_width
         self.resize_height = resize_height
         self.lbp_radius = lbp_radius
         self.lbp_points = lbp_points
         self.lbp_method = lbp_method
-        self.glcm_distances = glcm_distances
-        self.glcm_angles = glcm_angles
-        self.glcm_levels = glcm_levels
 
     def _preprocess(self, img_bgr: np.ndarray) -> np.ndarray:
         # Resize
@@ -41,48 +35,38 @@ class FeatureExtractorLBPGLCM:
             R=self.lbp_radius,
             method=self.lbp_method
         )
-        # Hasil LBP biasanya float, tapi kita mau pakai ke GLCM, jadi kita quantize ke range levels
-        lbp_norm = cv2.normalize(
-            lbp, None, alpha=0, beta=self.glcm_levels - 1,
-            norm_type=cv2.NORM_MINMAX
+        return lbp
+
+    def _compute_lbp_histogram(self, lbp_image: np.ndarray) -> np.ndarray:
+        """
+        Hitung histogram dari LBP image sebagai feature vector
+        
+        Args:
+            lbp_image: LBP image hasil dari local_binary_pattern()
+        
+        Returns:
+            Normalized histogram (numpy array)
+        """
+        # Untuk method="uniform" dengan P points → P+2 bins
+        # - P bins untuk uniform patterns (patterns with 0, 1, 2, ..., P-1 transitions)
+        # - 1 bin untuk non-uniform patterns (all other patterns)
+        # Untuk method="default" → 2^P bins (semua kombinasi binary pattern)
+        if self.lbp_method == "uniform":
+            n_bins = self.lbp_points + 2
+            hist_range = (0, n_bins)
+        else:
+            n_bins = 2 ** self.lbp_points
+            hist_range = (0, n_bins)
+        
+        hist, _ = np.histogram(
+            lbp_image.ravel(),
+            bins=n_bins,
+            range=hist_range
         )
-        lbp_uint8 = lbp_norm.astype(np.uint8)
-        return lbp_uint8
-
-    def _compute_glcm_features(self, img_gray_or_lbp: np.ndarray) -> np.ndarray:
-        # img harus uint8 dengan nilai [0, levels-1]
-        glcm = graycomatrix(
-            img_gray_or_lbp,
-            distances=self.glcm_distances,
-            angles=self.glcm_angles,
-            levels=self.glcm_levels,
-            symmetric=True,
-            normed=True
-        )
-
-        props = {}
-        for prop_name in ["contrast", "correlation", "energy", "homogeneity"]:
-            props[prop_name] = graycoprops(glcm, prop_name)
-
-        # props[prop_name] shape: (len(distances), len(angles))
-        # Flatten semua kombinasi distance-angle
-        feature_list = []
-        for prop_name in ["contrast", "correlation", "energy", "homogeneity"]:
-            feature_list.extend(props[prop_name].ravel())
-
-        # Tambahan fitur statistik orde pertama dari citra (mean, std, entropy sederhana)
-        img_flat = img_gray_or_lbp.ravel().astype(np.float32)
-        mean_val = np.mean(img_flat)
-        std_val = np.std(img_flat)
-
-        # entropy kasar pakai histogram
-        hist, _ = np.histogram(img_flat, bins=32, range=(0, self.glcm_levels - 1), density=True)
-        hist = hist + 1e-12
-        entropy_val = -np.sum(hist * np.log2(hist))
-
-        feature_list.extend([mean_val, std_val, entropy_val])
-
-        return np.array(feature_list, dtype=np.float32)
+        # Normalize histogram to sum to 1.0 (probability distribution)
+        hist = hist.astype(np.float32)
+        hist = hist / (np.sum(hist) + 1e-7)  # Add small epsilon to avoid division by zero
+        return hist
 
     def extract_from_array(self, img_bgr: np.ndarray) -> np.ndarray:
         """
@@ -90,9 +74,9 @@ class FeatureExtractorLBPGLCM:
         return: 1D feature vector (np.ndarray shape (n_features,))
         """
         gray = self._preprocess(img_bgr)
-        lbp_img = self._compute_lbp(gray)
-        features = self._compute_glcm_features(lbp_img)
-        return features
+        lbp_image = self._compute_lbp(gray)
+        histogram = self._compute_lbp_histogram(lbp_image)
+        return histogram
 
     def extract_from_path(self, img_path: str) -> np.ndarray:
         img_bgr = cv2.imread(img_path)
