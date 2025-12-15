@@ -47,8 +47,11 @@ class FeatureExtractorLBP:
         Returns:
             Normalized histogram (numpy array)
         """
-        # Untuk method="uniform" dengan 8 points → 10 bins
-        # Untuk method="default" → 256 bins
+        # Untuk method="uniform" dengan P points → P+2 bins
+        # - P bins untuk uniform patterns (0 to P-1)
+        # - 1 bin untuk rotation invariant uniform pattern 
+        # - 1 bin untuk non-uniform patterns
+        # Untuk method="default" → 2^P bins (semua kombinasi binary pattern)
         if self.lbp_method == "uniform":
             n_bins = self.lbp_points + 2
         else:
@@ -56,11 +59,12 @@ class FeatureExtractorLBP:
         
         hist, _ = np.histogram(
             lbp_image.ravel(),
-            bins=n_bins,
-            range=(0, n_bins),
-            density=True  # Normalize histogram
+            bins=n_bins
         )
-        return hist.astype(np.float32)
+        # Normalize histogram to sum to 1.0 (probability distribution)
+        hist = hist.astype(np.float32)
+        hist = hist / (np.sum(hist) + 1e-7)  # Add small epsilon to avoid division by zero
+        return hist
 
     def extract_from_array(self, img_bgr: np.ndarray) -> np.ndarray:
         """

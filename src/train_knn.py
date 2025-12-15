@@ -100,7 +100,7 @@ def main():
         resize_height=256,
         lbp_radius=1,
         lbp_points=8,
-        lbp_method="uniform"  # 10-dimensional feature vector
+        lbp_method="uniform"  # Uniform LBP: (lbp_points + 2) dimensional feature vector
     )
 
     # Load train & test
