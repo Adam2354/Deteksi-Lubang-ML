@@ -29,16 +29,20 @@ CLASS_COLORS = {
 # ============================================================================
 def extract_features_with_intermediate(image_bgr, apply_denoise=True, denoise_method='gaussian'):
     """
-    Extract features dari gambar DAN simpan hasil intermediate untuk visualisasi
+    Ekstrak fitur dari gambar DAN simpan hasil intermediate untuk visualisasi.
+    
+    Fungsi ini melakukan ekstraksi fitur secara manual dengan menyimpan
+    hasil dari setiap tahap preprocessing untuk keperluan visualisasi.
     
     Args:
-        image_bgr:  Input image dalam BGR format (dari cv2.imread)
-        apply_denoise: Boolean - enable/disable noise reduction
-        denoise_method:  String - metode denoising ('gaussian'/'bilateral'/'nlm')
+        image_bgr (np.ndarray): Gambar input dalam format BGR (dari cv2.imread)
+        apply_denoise (bool): Aktifkan/nonaktifkan pengurangan noise
+        denoise_method (str): Metode denoising ('gaussian'/'bilateral'/'nlm')
     
     Returns:
-        feature_vector: Array 1D berisi 6 features (contrast, correlation, energy, homogeneity, mean, std)
-        intermediate:  Dictionary berisi gambar hasil tiap step preprocessing
+        tuple: (feature_vector, intermediate)
+            - feature_vector: Array 1D berisi 6 features (contrast, correlation, energy, homogeneity, mean, std)
+            - intermediate: Dictionary berisi gambar hasil tiap step preprocessing
     """
     # ========================================
     # STEP 1: GRAYSCALE & RESIZE
@@ -123,11 +127,11 @@ def extract_features_with_intermediate(image_bgr, apply_denoise=True, denoise_me
     # STEP 8: COLLECT INTERMEDIATE RESULTS
     # ========================================
     # Simpan hasil tiap step dalam dictionary untuk visualisasi nanti
+    # GLCM tidak disimpan karena tidak ditampilkan di GUI
     intermediate = {
         'grayscale': grayscale,  # Hasil step 1
         'denoised': denoised,    # Hasil step 2
         'lbp': lbp_image,        # Hasil step 3
-        'glcm': glcm_matrix      # PERBAIKAN: simpan matrix asli (bukan normalized)
     }
     
     return feature_vector, intermediate
@@ -138,21 +142,25 @@ def extract_features_with_intermediate(image_bgr, apply_denoise=True, denoise_me
 # ============================================================================
 def predict_image_manual(image_path, model_path, apply_denoise=True, denoise_method='gaussian', verbose=True):
     """
-    Predict class dari single image menggunakan trained manual KNN model
+    Prediksi kelas dari single image menggunakan trained manual KNN model.
+    
+    Fungsi ini melakukan prediksi kondisi jalan (tidak rusak/lubang/retak)
+    dari gambar menggunakan model KNN yang telah dilatih sebelumnya.
     
     Args:
-        image_path: Path ke image file
-        model_path: Path ke saved model (. joblib)
-        apply_denoise: Enable/disable noise reduction
-        denoise_method: Metode denoising
-        verbose: Print progress information
+        image_path (str): Path ke file gambar
+        model_path (str): Path ke saved model (.joblib)
+        apply_denoise (bool): Aktifkan/nonaktifkan pengurangan noise
+        denoise_method (str): Metode denoising yang digunakan
+        verbose (bool): Tampilkan informasi progress
     
     Returns:
-        prediction: Predicted class ID (0/1/2)
-        class_name:  Predicted class name (string)
-        confidence: Confidence score (0-1)
-        distances: Distances ke k nearest neighbors
-        intermediate: Dictionary dengan intermediate images
+        tuple: (prediction, class_name, confidence, distances, intermediate)
+            - prediction: Predicted class ID (0/1/2)
+            - class_name: Predicted class name (string)
+            - confidence: Confidence score (0-1)
+            - distances: Distances ke k nearest neighbors
+            - intermediate: Dictionary dengan intermediate images
     """
     # ========================================
     # LOAD MODEL
@@ -254,16 +262,16 @@ def predict_image_manual(image_path, model_path, apply_denoise=True, denoise_met
 
 
 # ============================================================================
-# FUNCTION: VISUALIZE WITH PREPROCESSING STEPS (IMPROVED GLCM)
+# FUNCTION: VISUALIZE WITH PREPROCESSING STEPS (WITH LBP HISTOGRAM)
 # ============================================================================
 def visualize_prediction_with_preprocessing(image_path, prediction, class_name, confidence, distances, 
                                            intermediate, show_plot=True, save_path=None):
     """
-    Visualize hasil prediksi DENGAN preprocessing steps (6 panels)
+    Visualize hasil prediksi DENGAN preprocessing steps (5 panels).
     
-    Layout:  2 rows x 3 columns
+    Layout: 2 rows x 3 columns
     Row 1: Original | Grayscale | Denoised
-    Row 2: LBP      | GLCM      | Prediction Result
+    Row 2: LBP Histogram | Prediction Result | (empty)
     
     Args: 
         image_path: Path ke image
@@ -320,85 +328,44 @@ def visualize_prediction_with_preprocessing(image_path, prediction, class_name, 
     axes[0, 2].axis('off')
     
     # ========================================
-    # ROW 2, COL 1: LBP
+    # ROW 2, COL 1: LBP HISTOGRAM (BAR CHART)
     # ========================================
-    # Display LBP dengan colormap 'hot' (black-red-yellow-white)
-    # 'hot' bagus untuk menampilkan intensity patterns
-    lbp_plot = axes[1, 0].imshow(intermediate['lbp'], cmap='hot')
-    axes[1, 0].set_title('④ LBP (Local Binary Pattern)', fontsize=13, fontweight='bold')
-    axes[1, 0].axis('off')
+    # Hitung histogram dari LBP image
+    # Untuk uniform LBP dengan 8 points = 10 bins
+    lbp_image = intermediate['lbp']
+    n_bins = 10  # 8 uniform patterns + 1 non-uniform + 1 extra
     
-    # Tambahkan colorbar untuk LBP (legend warna)
-    # fraction=0.046 = ukuran colorbar relatif ke plot
-    # pad=0.04 = jarak colorbar dari plot
-    plt.colorbar(lbp_plot, ax=axes[1, 0], fraction=0.046, pad=0.04)
+    # Hitung histogram yang dinormalisasi
+    hist, _ = np.histogram(
+        lbp_image.ravel(),
+        bins=n_bins,
+        range=(0, n_bins),
+        density=True
+    )
     
-    # ========================================
-    # ROW 2, COL 2: GLCM (IMPROVED VISUALIZATION)
-    # ========================================
-    # PERBAIKAN: Gunakan GLCM matrix asli (bukan yang sudah dinormalized)
-    glcm_raw = intermediate['glcm']
+    # Buat bar chart
+    bars = axes[1, 0].bar(range(n_bins), hist, color='steelblue', edgecolor='black', alpha=0.8, width=0.8)
+    axes[1, 0].set_xlabel('LBP Pattern Bin', fontsize=11, fontweight='bold')
+    axes[1, 0].set_ylabel('Frekuensi', fontsize=11, fontweight='bold')
+    axes[1, 0].set_title('④ LBP Histogram', fontsize=13, fontweight='bold')
+    axes[1, 0].set_xticks(range(n_bins))
+    axes[1, 0].grid(axis='y', alpha=0.3, linestyle='--')
     
-    # ---- STEP 1: FIND DATA BOUNDARIES ----
-    # Cari area mana saja yang ada data (non-zero)
-    # np.where returns indices dimana condition True
-    non_zero_rows, non_zero_cols = np.where(glcm_raw > 0)
-    
-    # ---- STEP 2: CROP TO MEANINGFUL AREA ----
-    # Jika ada data
-    if len(non_zero_rows) > 0 and len(non_zero_cols) > 0:
-        # Cari batas atas data (+10 untuk margin)
-        max_row = min(non_zero_rows. max() + 10, 256)  # Max 256 (ukuran GLCM)
-        max_col = min(non_zero_cols.max() + 10, 256)
-        
-        # Crop matrix ke area yang ada data saja
-        glcm_cropped = glcm_raw[: max_row, :max_col]
-        
-        # ---- STEP 3: APPLY LOG SCALE ----
-        # Log scale membuat perbedaan kecil lebih visible
-        # log10(0.01) = -2, log10(0.0001) = -4
-        # +1e-10 = tambah nilai kecil untuk avoid log(0) = infinity
-        glcm_log = np.log10(glcm_cropped + 1e-10)
-        
-        # ---- STEP 4: NORMALIZE TO 0-1 ----
-        # Normalize untuk display (0=min, 1=max)
-        # +1e-10 di denominator untuk avoid division by zero
-        glcm_min = glcm_log. min()
-        glcm_max = glcm_log.max()
-        glcm_display_data = (glcm_log - glcm_min) / (glcm_max - glcm_min + 1e-10)
-    else:
-        # Fallback jika tidak ada data:  tampilkan raw 50x50
-        glcm_display_data = glcm_raw[: 50, :50]
-    
-    # ---- STEP 5: DISPLAY GLCM ----
-    # Display dengan colormap 'plasma' (ungu-biru-hijau-kuning)
-    # interpolation='nearest' = no smoothing between pixels
-    glcm_plot = axes[1, 1]. imshow(glcm_display_data, cmap='plasma', interpolation='nearest')
-    
-    # Set title dengan ukuran matrix yang ditampilkan
-    axes[1, 1].set_title(f'⑤ GLCM Matrix ({glcm_display_data.shape[0]}×{glcm_display_data.shape[1]})', 
-                        fontsize=13, fontweight='bold')
-    
-    # ---- STEP 6: ADD COLORBAR ----
-    # Tambahkan colorbar untuk GLCM
-    cbar = plt.colorbar(glcm_plot, ax=axes[1, 1], fraction=0.046, pad=0.04)
-    # Set label untuk colorbar
-    # rotation=270 = text vertikal
-    # labelpad=20 = jarak label dari colorbar
-    cbar.set_label('Co-occurrence\nProbability (log scale)', rotation=270, labelpad=20, fontsize=9)
-    
-    # ---- STEP 7: ADD AXIS LABELS ----
-    # Tambahkan label untuk axis (i = row, j = column)
-    axes[1, 1].set_xlabel('Pixel Value j', fontsize=9)
-    axes[1, 1].set_ylabel('Pixel Value i', fontsize=9)
-    # Kecilkan ukuran tick labels
-    axes[1, 1].tick_params(labelsize=8)
+    # Tambahkan nilai di atas setiap bar
+    for i, bar in enumerate(bars):
+        height = bar.get_height()
+        axes[1, 0].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}',
+                ha='center', va='bottom', fontsize=8)
     
     # ========================================
-    # ROW 2, COL 3: PREDICTION RESULT
+    # ROW 2, COL 2: PREDICTION RESULT
+    # ========================================
+    # ========================================
+    # ROW 2, COL 2: PREDICTION RESULT
     # ========================================
     # Display original image sebagai background
-    axes[1, 2].imshow(img_rgb)
+    axes[1, 1].imshow(img_rgb)
     
     # ---- ADD TEXT OVERLAY ----
     # Get image dimensions
@@ -415,18 +382,18 @@ def visualize_prediction_with_preprocessing(image_path, prediction, class_name, 
     # alpha=0.75 = 75% opaque (25% transparent)
     rect = Rectangle((0, 0), width, rect_height, 
                      facecolor='black', alpha=0.75, edgecolor='none')
-    axes[1, 2].add_patch(rect)
+    axes[1, 1].add_patch(rect)
     
     # ---- PREDICTION TEXT ----
     # Tentukan warna text berdasarkan prediction
     color_map = {0: 'lime', 1: 'red', 2: 'orange'}
-    text_color = color_map. get(prediction, 'white')
+    text_color = color_map.get(prediction, 'white')
     
-    # Text:  class name
+    # Text: class name
     # (width/2, rect_height*0.20) = posisi X, Y
     # ha='center' = horizontal alignment center
     # va='center' = vertical alignment center
-    axes[1, 2].text(width/2, rect_height*0.20, f"🏷️ {class_name}", 
+    axes[1, 1].text(width/2, rect_height*0.20, f"🏷️ {class_name}", 
                    ha='center', va='center', 
                    fontsize=16, fontweight='bold', color=text_color)
     
@@ -437,28 +404,34 @@ def visualize_prediction_with_preprocessing(image_path, prediction, class_name, 
     
     # Text: confidence percentage
     # {confidence:.1%} = format as percentage with 1 decimal (e.g., 85.2%)
-    axes[1, 2].text(width/2, rect_height*0.45, f"💯 {confidence:.1%}", 
+    axes[1, 1].text(width/2, rect_height*0.45, f"💯 {confidence:.1%}", 
                    ha='center', va='center', 
                    fontsize=14, fontweight='bold', color=confidence_color)
     
     # ---- DISTANCE TEXT ----
     # Text: average distance to neighbors
     # {np.mean(distances):.4f} = format dengan 4 decimal places
-    axes[1, 2].text(width/2, rect_height*0.65, 
+    axes[1, 1].text(width/2, rect_height*0.65, 
                    f"📏 Avg Dist: {np.mean(distances):.4f}", 
                    ha='center', va='center', 
                    fontsize=11, color='white')
     
     # ---- FEATURE COUNT TEXT ----
-    # Text:  jumlah features yang di-extract
+    # Text: jumlah features yang di-extract
     # style='italic' = text miring
-    axes[1, 2].text(width/2, rect_height*0.85, 
+    axes[1, 1].text(width/2, rect_height*0.85, 
                    f"📊 6 features extracted", 
                    ha='center', va='center', 
                    fontsize=10, color='lightgray', style='italic')
     
     # Set title untuk panel prediction result
-    axes[1, 2].set_title('⑥ Prediction Result', fontsize=13, fontweight='bold')
+    axes[1, 1].set_title('⑤ Prediction Result', fontsize=13, fontweight='bold')
+    axes[1, 1].axis('off')
+    
+    # ========================================
+    # ROW 2, COL 3: HIDE (NOT USED)
+    # ========================================
+    # Hide panel terakhir karena tidak digunakan
     axes[1, 2].axis('off')
     
     # ========================================
@@ -610,7 +583,11 @@ def print_prediction_result(image_path, prediction, class_name, confidence, dist
 # ============================================================================
 def main():
     """
-    Main function untuk menjalankan prediction dengan command-line interface
+    Fungsi utama untuk menjalankan prediksi dengan command-line interface.
+    
+    Fungsi ini menyediakan antarmuka command-line untuk melakukan prediksi
+    kondisi jalan dari gambar dengan berbagai opsi kustomisasi seperti
+    metode denoising, format visualisasi, dan penyimpanan hasil.
     """
     import argparse
     
