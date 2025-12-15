@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from joblib import load
 
-from extract_features import FeatureExtractorLBPGLCM
+from extract_features import FeatureExtractorLBP
 
 LABEL_MAP = {
     0: "jalan_tidak_rusak",
@@ -12,8 +12,8 @@ LABEL_MAP = {
 }
 
 def load_model_and_scaler(models_dir: str):
-    model_path = os.path.join(models_dir, "knn_lbp_glcm_k3.joblib")
-    scaler_path = os.path.join(models_dir, "scaler_lbp_glcm_k3.joblib")
+    model_path = os.path.join(models_dir, "knn_lbp_hist_k3.joblib")
+    scaler_path = os.path.join(models_dir, "scaler_lbp_hist_k3.joblib")
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model tidak ditemukan: {model_path}")
@@ -26,15 +26,12 @@ def load_model_and_scaler(models_dir: str):
 
 def main():
     # init extractor
-    extractor = FeatureExtractorLBPGLCM(
+    extractor = FeatureExtractorLBP(
         resize_width=256,
         resize_height=256,
         lbp_radius=1,
         lbp_points=8,
-        lbp_method="default",
-        glcm_distances=(1,),
-        glcm_angles=(0,),
-        glcm_levels=256,
+        lbp_method="uniform"  # 10-dimensional feature vector
     )
 
     # paths
@@ -80,7 +77,7 @@ def main():
         cv2.putText(frame, pred_label_str, (roi_left + 10, roi_top - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        cv2.imshow("Deteksi Kondisi Jalan (KNN + LBP+GLCM)", frame)
+        cv2.imshow("Deteksi Kondisi Jalan (KNN + LBP Histogram)", frame)
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
