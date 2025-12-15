@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from joblib import load
 
-from extract_features import FeatureExtractorLBPGLCM
+from extract_features import FeatureExtractorHybrid
 
 LABEL_MAP = {
     0: "jalan_tidak_rusak",
@@ -12,8 +12,17 @@ LABEL_MAP = {
 }
 
 def load_model_and_scaler(models_dir: str):
-    model_path = os.path.join(models_dir, "knn_lbp_glcm_k3.joblib")
-    scaler_path = os.path.join(models_dir, "scaler_lbp_glcm_k3.joblib")
+    """
+    Load model KNN dan scaler yang telah dilatih.
+    
+    Args:
+        models_dir (str): Direktori tempat model disimpan
+        
+    Returns:
+        tuple: (model, scaler) - KNN model dan StandardScaler
+    """
+    model_path = os.path.join(models_dir, "knn_hybrid_k3.joblib")
+    scaler_path = os.path.join(models_dir, "scaler_hybrid_k3.joblib")
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model tidak ditemukan: {model_path}")
@@ -25,13 +34,14 @@ def load_model_and_scaler(models_dir: str):
     return model, scaler
 
 def main():
-    # init extractor
-    extractor = FeatureExtractorLBPGLCM(
+    # Inisialisasi hybrid feature extractor
+    # Menggunakan LBP Histogram (10) + GLCM (4) + Statistics (3) = 17 features
+    extractor = FeatureExtractorHybrid(
         resize_width=256,
         resize_height=256,
         lbp_radius=1,
         lbp_points=8,
-        lbp_method="default",
+        lbp_method="uniform",  # Rotation-invariant LBP
         glcm_distances=(1,),
         glcm_angles=(0,),
         glcm_levels=256,
@@ -44,7 +54,7 @@ def main():
 
     model, scaler = load_model_and_scaler(models_dir)
 
-    # 0 = webcam default, kalau mau file video: ganti jadi path file [web:110][web:114]
+    # 0 = webcam default, kalau mau file video: ganti jadi path file
     cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
@@ -59,7 +69,7 @@ def main():
         h, w, _ = frame.shape
 
         # Definisikan ROI area jalan (misal bawah-tengah frame)
-        # Silakan adjust sesuai posisi kamera di kendaraan [web:108][web:109]
+        # Silakan adjust sesuai posisi kamera di kendaraan
         roi_top = int(h * 0.5)
         roi_bottom = h
         roi_left = int(w * 0.25)
@@ -75,7 +85,7 @@ def main():
         pred_label_int = int(model.predict(features_scaled)[0])
         pred_label_str = LABEL_MAP.get(pred_label_int, f"unknown({pred_label_int})")
 
-        # Gambar kotak ROI + label di frame [web:113][web:117][web:120][web:123]
+        # Gambar kotak ROI + label di frame
         cv2.rectangle(frame, (roi_left, roi_top), (roi_right, roi_bottom), (0, 255, 0), 2)
         cv2.putText(frame, pred_label_str, (roi_left + 10, roi_top - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
